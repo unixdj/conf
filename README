@@ -1,0 +1,5 @@
+Trivial configuration file parser for Go.  Documentation in source files.
+
+Copyright 2011 Vadim Vygonets.  Licensed under WTFPL 2.0.
+
+I wrote this because other Go configuration file parser packages are too big.
