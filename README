@@ -2,6 +2,9 @@ Trivial configuration file parser for Go.
 
 Copyright 2011 Vadim Vygonets.  Licensed under WTFPL 2.0.
 
+Installing:
+goinstall github.com/unixdj/conf 
+
 Documentation in source files.  You can view it online here:
 http://gopkgdoc.appspot.com/pkg/github.com/unixdj/conf
 
