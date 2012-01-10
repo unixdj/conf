@@ -114,8 +114,52 @@ func (v *StringValue) Set(s string) error {
 
 func (v *StringValue) String() string { return string(*v) }
 
+// BoolValue represents a configuration variable's boolean value.
+// Syntax: 0/false/off/no/disabled 1/true/on/yes/enabled (case insensitive).
+type BoolValue bool
+
+func strInList(s string, l []string) bool {
+	for _, v := range l {
+		if strings.EqualFold(s, v) {
+			return true
+		}
+	}
+	return false
+}
+
+func (v *BoolValue) Set(s string) error {
+	switch {
+	case strInList(s, []string{"0", "false", "off", "no", "disabled"}):
+		*v = false;
+	case strInList(s, []string{"1", "true", "on", "yes", "enabled"}):
+		*v = true;
+	default:
+		return errors.New(syntaxError)
+	}
+	return nil
+}
+
+func (v *BoolValue) String() string { return strconv.FormatBool(bool(*v)) }
+
+// Int64Value represents a configuration variable's int64 value.
+// Numeric values can be given as decimal, octal or hexadecimal
+// in the usual C/Go manner (255 == 0377 == 0xff).
+type Int64Value int64
+
+func (v *Int64Value) Set(s string) error {
+	u, err := strconv.ParseInt(s, 0, 64)
+	if err != nil {
+		// strip fluff from strconf.ParseInt
+		return err.(*strconv.NumError).Err
+	}
+	*v = Int64Value(u)
+	return nil
+}
+
+func (v *Int64Value) String() string { return strconv.FormatInt(int64(*v), 10) }
+
 // Uint64Value represents a configuration variable's uint64 value.
-// Numeric values can be given as decimal, octal or hexadecimal,
+// Numeric values can be given as decimal, octal or hexadecimal
 // in the usual C/Go manner (255 == 0377 == 0xff).
 type Uint64Value uint64
 
@@ -129,7 +173,7 @@ func (v *Uint64Value) Set(s string) error {
 	return nil
 }
 
-func (v *Uint64Value) String() string { return fmt.Sprintf("%d", *v) }
+func (v *Uint64Value) String() string { return strconv.FormatUint(uint64(*v), 10) }
 
 // Var describes a configuration variable and has pointers to corresponding
 // (Go) variables.  Slice of Var is used for calling Parse().
@@ -150,7 +194,6 @@ type parser struct {
 }
 
 const (
-	outOfRange  = "value out of range"
 	syntaxError = "syntax error"
 )
 
@@ -200,11 +243,11 @@ func (p *parser) setValue(value string) error {
 			if v.set {
 				return p.newError("already defined")
 			}
-			v.set = true
 			if err := v.Val.Set(value); err != nil {
 				return &ParseError{p.file, p.line, p.ident,
 					p.value, err}
 			}
+			v.set = true
 			return nil
 		}
 	}
@@ -284,9 +327,8 @@ func Parse(r io.Reader, filename string, vars []Var) error {
 	}
 	for _, v := range p.vars {
 		if v.Required && !v.set {
-			p.ident = v.Name
-			p.line, p.value = 0, ""
-			return p.newError("required but not set")
+			return &ParseError{p.file, 0, v.Name, "",
+				errors.New("required but not set")}
 		}
 	}
 	return nil

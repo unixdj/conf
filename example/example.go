@@ -9,6 +9,7 @@ import (
 )
 
 var (
+	bval     bool
 	sval     = "default value"
 	nval     uint64
 	netKey   []byte
@@ -36,6 +37,7 @@ func readConf(conffile string) error {
 	return conf.Parse(f, conffile, []conf.Var{
 		{Name: "string", Val: (*conf.StringValue)(&sval)},
 		{Name: "number", Val: (*conf.Uint64Value)(&nval)},
+		{Name: "bool", Val: (*conf.BoolValue)(&bval)},
 		{Name: "key", Val: (*netKeyValue)(&netKey), Required: true},
 	})
 }
@@ -45,5 +47,6 @@ func main() {
 		fmt.Printf("%s\n", err)
 		return
 	}
-	fmt.Printf("string: %s\nnumber: %d\nkey: %x\n", sval, nval, netKey)
+	fmt.Printf("string: %s\nnumber: %d\nbool: %v\nkey: %x\n",
+		sval, nval, bval, netKey)
 }
