@@ -1,5 +1,5 @@
 // Copyright 2001 Vadim Vygonets.  No rights reserved.
-// Use of this source code is governed by the WTFPL 2.0 license
+// Use of this source code is governed by WTFPL v2
 // that can be found in the LICENSE file.
 
 /*
