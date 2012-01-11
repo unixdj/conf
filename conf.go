@@ -39,48 +39,47 @@ Example:
 
 More formally:
 
-	file:
-		lines
-	lines:
-		|
-		line lines
-	line:
-		optional-assignment optional-comment '\n'
-	optional-assignment:
-		|
-		assignment
-	assignment:
-		ident '=' value
-	value:
-		plain-value |
-		quoted-value
-	optional-comment:
-		|
-		comment
+	file           = *(line)
+	line           = opt-assignment opt-comment NL
+	opt-assignment = [ assignment ]
+	assignment     = IDENT EQUALS value
+	value          = PLAIN-VALUE / QUOTED-VALUE
+	opt-comment    = [ COMMENT ]
+
+	The token OPT-WHITESPACE can appear anywhere and is ignored.
 
 Tokens:
-	ident: <ident-alpha> <ident-alnum>*
-	<ident-alpha>: ascii-alpha | '-' | '_'
-	<ident-alnum>: <ident-alpha> | ascii-digit
 
-	plain-value: <plain-val-char>+
-	<plain-val-char>: anything except space, control, '"', '#', `'`, '=', `\`
+	OPT-WHITESPACE = *(space)
+	NL             = '\n'
+	COMMENT        = '#' *(line-char)
+	IDENT          = ident-alpha *(ident-alnum)
+	EQUALS         = '='
+	PLAIN-VALUE    = 1*(ptext)
+	QUOTED-VALUE   = '"' *(qtext / quoted-pair) '"'
 
-	quoted-value: '"' <quoted-val-char>* '"'
-	<quoted-val-char>: <self-char> | `\` <quoted-char>
-	<self-char>: anything except control, `"`, `\`
-	<quoted-char>: 'a' | 'b' | 'f' | 'n' | 'r' | 'v' | `\` | '"' |
-	<octal-byte-value> | <hex-byte-value> | <unicode-value>
-	<octal-byte-value>: octal-digit{3}
-	<hex-byte-value>: 'x' hex-digit{2}
-	<unicode-value>: 'u' hex-digit{4} | 'U' hex-digit{8}
+	ident-alnum    = ident-alpha / ascii-digit
+	ident-alpha    = ascii-alpha / '-' / '_'
 
-	comment: '#' <any-char>*
+	quoted-pair    = `\` quoted-char
+	quoted-char    = 'a' / 'b' / 'f' / 'n' / 'r' / 'v' / `\` / '"' /
+			 octal-byte-val / hex-byte-val / unicode-val
+	octal-byte-val = 3(octal-digit)
+	hex-byte-val   = 'x' 2(hex-digit)
+	unicode-val    = 'u' 4(hex-digit) / 'U' 8(hex-digit)
 
-	ascii-alpha: [a-zA-Z]
-	ascii-digit: [0-9]
-	control: Unicode character class C (includes 00-1F and 80-9F)
-	space: Unicode character class Z
+	ptext          = <any character except space,
+			 control, '"', '#', `'`, '=', `\`>
+	qtext          = <any character except control, `"`, `\`>
+
+	ascii-alpha    = [a-zA-Z]
+	ascii-digit    = [0-9]
+	octal-digit    = [0-7]
+	hex-digit      = [0-9a-fA-f]
+	control        = [\pC]	; Unicode character class C
+				; (includes 00-1F and 80-9F)
+	space          = [\pZ]	; Unicode character class Z
+	line-char      = [^\n]	; anything except NL
 */
 package conf
 
