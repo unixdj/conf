@@ -24,7 +24,7 @@ them besides space (Unicode character class Z), control characters
 
 Quoted values are enclosed in double quotes (like "this") and obey Go
 quoted string rules.  They may not include Unicode control characters.
-Any character except `"` and `\` stands for itself.  Backslash escapes
+Any character except '"' and `\` stands for itself.  Backslash escapes
 \a, \b, \f, \n, \r, \v, \", \\, \337, \xDF, \u1A2F and \U00104567 are
 accepted.  Quoted values, unlike plain ones, can be empty ("").
 
@@ -62,15 +62,15 @@ Tokens:
 	ident-alpha    = ascii-alpha / '-' / '_'
 
 	quoted-pair    = `\` quoted-char
-	quoted-char    = 'a' / 'b' / 'f' / 'n' / 'r' / 'v' / `\` / '"' /
-			 octal-byte-val / hex-byte-val / unicode-val
+	quoted-char    = special / octal-byte-val / hex-byte-val / unicode-val
+	special        = 'a' / 'b' / 'f' / 'n' / 'r' / 'v' / '"' / `\`
 	octal-byte-val = 3(octal-digit)
 	hex-byte-val   = 'x' 2(hex-digit)
 	unicode-val    = 'u' 4(hex-digit) / 'U' 8(hex-digit)
 
 	ptext          = <any character except space,
 			 control, '"', '#', `'`, '=', `\`>
-	qtext          = <any character except control, `"`, `\`>
+	qtext          = <any character except control, '"', `\`>
 
 	ascii-alpha    = [a-zA-Z]
 	ascii-digit    = [0-9]
