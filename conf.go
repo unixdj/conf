@@ -181,10 +181,13 @@ func (v *Uint64Value) String() string { return strconv.FormatUint(uint64(*v), 10
 // Var describes a configuration variable and has pointers to corresponding
 // (Go) variables.  Slice of Var is used for calling Parse().
 type Var struct {
-	Name     string // name of configuration variable
+	Flag     rune   // short option
+	Name     string // name of configuration variable / long option
 	Val      Value  // Value to set
 	Required bool   // variable is required to be set in conf file
-	set      bool   // has been set
+	Bare     bool   // command line option takes no argument
+	set      bool   // has been set from conf file
+	flagSet  bool   // has been set from command line
 }
 
 type parser struct {
@@ -250,9 +253,11 @@ func (p *parser) setValue(value string) error {
 			if v.set {
 				return p.newError(errAlreadyDef)
 			}
-			if err := v.Val.Set(value); err != nil {
-				return &ParseError{p.file, p.line, p.ident,
-					p.value, err}
+			if !v.flagSet {
+				if err := v.Val.Set(value); err != nil {
+					return &ParseError{p.file, p.line,
+						p.ident, p.value, err}
+				}
 			}
 			v.set = true
 			return nil

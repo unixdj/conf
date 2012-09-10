@@ -13,6 +13,7 @@ import (
 )
 
 var (
+	confFile = "example.conf"
 	bval     bool
 	sval     = "default value"
 	nval     uint64
@@ -32,25 +33,40 @@ func (key *netKeyValue) Set(s string) error {
 
 //func (key *netKeyValue) String() string { return fmt.Sprintf("%x", *key) }
 
-func readConf(conffile string) error {
+var vars = []conf.Var{
+	// cmd-line only:
+	//{Flag: 'h', Val: (*conf.StringValue)(&confFile)},
+	{Flag: 'c', Val: (*conf.StringValue)(&confFile)},
+	// cmd-line and conf-file:
+	{Flag: 's', Name: "string", Val: (*conf.StringValue)(&sval)},
+	{Flag: 'n', Name: "number", Val: (*conf.Uint64Value)(&nval)},
+	{Flag: 'b', Name: "bool", Val: (*conf.BoolValue)(&bval), Bare: true},
+	{Flag: 'k', Name: "key", Val: (*netKeyValue)(&netKey), Required: true},
+	// conf-file only:
+}
+
+func readConf(conffile string, vars []conf.Var) error {
 	f, err := os.Open(conffile)
 	if err != nil {
 		return err
 	}
 	defer f.Close()
-	return conf.Parse(f, conffile, []conf.Var{
-		{Name: "string", Val: (*conf.StringValue)(&sval)},
-		{Name: "number", Val: (*conf.Uint64Value)(&nval)},
-		{Name: "bool", Val: (*conf.BoolValue)(&bval)},
-		{Name: "key", Val: (*netKeyValue)(&netKey), Required: true},
-	})
+	return conf.Parse(f, conffile, vars)
 }
 
 func main() {
-	if err := readConf("example.conf"); err != nil {
+	fmt.Printf("*** start:\nconffile: %s\nstring: %s\nnumber: %d\nbool: %v\nkey: %x\n",
+		confFile, sval, nval, bval, netKey)
+	if err := conf.GetOpt(vars); err != nil {
 		fmt.Printf("%s\n", err)
 		return
 	}
-	fmt.Printf("string: %s\nnumber: %d\nbool: %v\nkey: %x\n",
-		sval, nval, bval, netKey)
+	fmt.Printf("*** after GetOpt:\nconffile: %s\nstring: %s\nnumber: %d\nbool: %v\nkey: %x\n",
+		confFile, sval, nval, bval, netKey)
+	if err := readConf(confFile, vars[1:]); err != nil {
+		fmt.Printf("%s\n", err)
+		return
+	}
+	fmt.Printf("*** after Parse:\nconffile: %s\nstring: %s\nnumber: %d\nbool: %v\nkey: %x\n",
+		confFile, sval, nval, bval, netKey)
 }
