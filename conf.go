@@ -1,6 +1,9 @@
-// Copyright 2001 Vadim Vygonets.  No rights reserved.
-// Use of this source code is governed by WTFPL v2
-// that can be found in the LICENSE file.
+// Copyright 2012 Vadim Vygonets
+// This program is free software. It comes without any warranty, to
+// the extent permitted by applicable law. You can redistribute it
+// and/or modify it under the terms of the Do What The Fuck You Want
+// To Public License, Version 2, as published by Sam Hocevar. See
+// the LICENSE file or http://sam.zoy.org/wtfpl/ for more details.
 
 /*
 Package conf parses simple configuration files.
@@ -114,7 +117,8 @@ func (v *StringValue) Set(s string) error {
 func (v *StringValue) String() string { return string(*v) }
 
 // BoolValue represents a configuration variable's boolean value.
-// Syntax: 0/false/off/no/disabled 1/true/on/yes/enabled (case insensitive).
+// Syntax: 0/false/f/off/no/n/disabled 1/true/t/on/yes/y/enabled
+// (case insensitive).
 type BoolValue bool
 
 func strInList(s string, l []string) bool {
@@ -128,12 +132,12 @@ func strInList(s string, l []string) bool {
 
 func (v *BoolValue) Set(s string) error {
 	switch {
-	case strInList(s, []string{"0", "false", "off", "no", "disabled"}):
-		*v = false;
-	case strInList(s, []string{"1", "true", "on", "yes", "enabled"}):
-		*v = true;
+	case strInList(s, []string{"0", "false", "f", "off", "no", "n", "disabled"}):
+		*v = false
+	case strInList(s, []string{"1", "true", "t", "on", "yes", "y", "enabled"}):
+		*v = true
 	default:
-		return errors.New(syntaxError)
+		return errSyntax
 	}
 	return nil
 }
@@ -192,8 +196,12 @@ type parser struct {
 	vars  []Var
 }
 
-const (
-	syntaxError = "syntax error"
+var (
+	errSyntax      = errors.New("syntax error")
+	errLineTooLong = errors.New("line too long")
+	errReqNotSet   = errors.New("required but not set")
+	errAlreadyDef  = errors.New("already defined")
+	errUnknownVar  = errors.New("unknown variable")
 )
 
 // ParseError represents the error.
@@ -220,8 +228,8 @@ func (p *ParseError) Error() string {
 }
 
 // newError creates ParseError from s
-func (p *parser) newError(s string) *ParseError {
-	return &ParseError{p.file, p.line, p.ident, p.value, errors.New(s)}
+func (p *parser) newError(e error) *ParseError {
+	return &ParseError{p.file, p.line, p.ident, p.value, e}
 }
 
 // Regexps for tokens
@@ -240,7 +248,7 @@ func (p *parser) setValue(value string) error {
 		v := &p.vars[i]
 		if p.ident == v.Name {
 			if v.set {
-				return p.newError("already defined")
+				return p.newError(errAlreadyDef)
 			}
 			if err := v.Val.Set(value); err != nil {
 				return &ParseError{p.file, p.line, p.ident,
@@ -250,7 +258,7 @@ func (p *parser) setValue(value string) error {
 			return nil
 		}
 	}
-	return p.newError("unknown variable")
+	return p.newError(errUnknownVar)
 }
 
 func (p *parser) parseLine(line string) error {
@@ -261,7 +269,7 @@ func (p *parser) parseLine(line string) error {
 	p.ident = identRE.FindString(line)
 	line = eatSpace(line[len(p.ident):])
 	if p.ident == "" || line == "" || line[0] != '=' {
-		return p.newError(syntaxError)
+		return p.newError(errSyntax)
 	}
 	line = eatSpace(line[1:])
 	p.value = plainRE.FindString(line)
@@ -271,12 +279,12 @@ func (p *parser) parseLine(line string) error {
 		var err error
 		unquoted, err = strconv.Unquote(p.value)
 		if err != nil {
-			return p.newError(syntaxError)
+			return p.newError(errSyntax)
 		}
 	}
 	line = eatSpace(line[len(p.value):])
 	if len(line) != 0 && line[0] != '#' {
-		return p.newError(syntaxError)
+		return p.newError(errSyntax)
 	}
 	return p.setValue(unquoted)
 }
@@ -318,7 +326,7 @@ func Parse(r io.Reader, filename string, vars []Var) error {
 		} else if err != nil {
 			return err
 		} else if ispref {
-			return p.newError("line too long")
+			return p.newError(errLineTooLong)
 		}
 		if err = p.parseLine(string(buf)); err != nil {
 			return err
@@ -326,8 +334,7 @@ func Parse(r io.Reader, filename string, vars []Var) error {
 	}
 	for _, v := range p.vars {
 		if v.Required && !v.set {
-			return &ParseError{p.file, 0, v.Name, "",
-				errors.New("required but not set")}
+			return &ParseError{p.file, 0, v.Name, "", errReqNotSet}
 		}
 	}
 	return nil
