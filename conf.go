@@ -178,14 +178,20 @@ func (v *Uint64Value) Set(s string) error {
 
 func (v *Uint64Value) String() string { return strconv.FormatUint(uint64(*v), 10) }
 
+const (
+	HasArg = iota
+	NoArg
+	LineArg
+)
+
 // Var describes a configuration variable and has pointers to corresponding
 // (Go) variables.  Slice of Var is used for calling Parse().
 type Var struct {
 	Flag     rune   // short option
 	Name     string // name of configuration variable / long option
 	Val      Value  // Value to set
+	Kind     int    // command line option takes no argument
 	Required bool   // variable is required to be set in conf file
-	Bare     bool   // command line option takes no argument
 	set      bool   // has been set from conf file
 	flagSet  bool   // has been set from command line
 }

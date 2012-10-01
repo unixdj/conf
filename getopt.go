@@ -14,8 +14,9 @@ import (
 )
 
 var (
-	errIllOpt = errors.New("illegal option")
-	errNoArg  = errors.New("option requires an argument")
+	errIllOpt  = errors.New("illegal option")
+	errNoArg   = errors.New("option requires an argument")
+	errEndJunk = errors.New("option requires an argument")
 )
 
 var Args []string
@@ -43,38 +44,109 @@ func newError(f rune, v string, e error) *FlagError {
 	return &FlagError{f, v, e}
 }
 
-func getFlag(flag rune, vars []Var) *Var {
+// flavour
+const (
+	Short = iota
+	XLong
+	GnuLong
+)
+
+const (
+	shortFlag = iota
+	longFlag
+	falseFlag
+	endArg
+	endArgSkip
+)
+
+func nextArg(arg string, flavour int) (int, string) {
+	if len(arg) <= 1 {
+		return endArg, ""
+	}
+	switch arg[0] {
+	case '-':
+		if arg[1] == '-' {
+			if len(arg) == 2 {
+				return endArgSkip, ""
+			}
+			if flavour == GnuLong {
+				return longFlag, arg[2:]
+			}
+		}
+		if flavour == XLong {
+			return longFlag, arg[1:]
+		}
+		return shortFlag, arg[1:]
+	case '+':
+		if flavour == XLong {
+			return falseFlag, arg[1:]
+		}
+	}
+	return endArg, ""
+}
+
+func nextFlag(this string, kind int) (rune, string, string) {
+	if kind != shortFlag {
+		return 0, this, ""
+	}
+	flag, size := utf8.DecodeRuneInString(this)
+	return flag, "", this[size:]
+}
+
+func getFlag(flag rune, long string, kind int, vars []Var) *Var {
+	var eq func(i int) bool
+	if kind == shortFlag {
+		eq = func(i int) bool { return vars[i].Flag == flag }
+	} else {
+		eq = func(i int) bool { return vars[i].Name == long }
+	}
 	for i := range vars {
-		if vars[i].Flag == flag {
+		if eq(i) {
 			return &vars[i]
 		}
 	}
 	return nil
 }
 
-func GetOpt(vars []Var) error {
+func doGetOpt(vars []Var, flavour int) error {
 	Args = make([]string, len(os.Args)-1)
 	copy(Args, os.Args[1:])
-	for len(Args) > 0 && len(Args[0]) > 1 && Args[0][0] == '-' {
-		if Args[0] == "--" {
-			Args = Args[1:]
+	for len(Args) > 0 {
+		kind, this := nextArg(Args[0], flavour)
+		if kind == endArg {
 			break
 		}
-		var this, p string
-		this, Args = Args[0][1:], Args[1:]
+		Args = Args[1:]
+		if kind == endArgSkip {
+			break
+		}
 		for len(this) > 0 {
-			flag, size := utf8.DecodeRuneInString(this)
-			this = this[size:]
+			var (
+				flag rune
+				long string
+				p    string
+			)
+			flag, long, this = nextFlag(this, kind)
 			if flag == utf8.RuneError {
-				return newError(flag, "", errSyntax)
+				return newError(flag, long, errSyntax)
 			}
-			v := getFlag(flag, vars)
+			v := getFlag(flag, long, kind, vars)
 			if v == nil {
-				return newError(flag, "", errIllOpt)
+				return newError(flag, long, errIllOpt)
 			}
 			switch {
-			case v.Bare:
+			case kind == falseFlag:
+				if v.Kind != NoArg {
+					return newError(flag, long, errIllOpt)
+				}
+				p = "false"
+			case v.Kind == NoArg:
 				p = "true"
+			case v.Kind == LineArg:
+				if this != "" {
+					// XXX
+					return newError(0, this, errEndJunk)
+				}
 			case this != "":
 				p, this = this, ""
 			case len(Args) != 0:
@@ -90,3 +162,7 @@ func GetOpt(vars []Var) error {
 	}
 	return nil
 }
+
+func GetOpt(vars []Var) error         { return doGetOpt(vars, Short) }
+func GetOptLong(vars []Var) error     { return doGetOpt(vars, GnuLong) }
+func GetOptLongOnly(vars []Var) error { return doGetOpt(vars, XLong) }

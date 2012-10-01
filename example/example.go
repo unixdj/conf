@@ -40,7 +40,7 @@ var vars = []conf.Var{
 	// cmd-line and conf-file:
 	{Flag: 's', Name: "string", Val: (*conf.StringValue)(&sval)},
 	{Flag: 'n', Name: "number", Val: (*conf.Uint64Value)(&nval)},
-	{Flag: 'b', Name: "bool", Val: (*conf.BoolValue)(&bval), Bare: true},
+	{Flag: 'b', Name: "bool", Val: (*conf.BoolValue)(&bval), Kind: conf.NoArg},
 	{Flag: 'k', Name: "key", Val: (*netKeyValue)(&netKey), Required: true},
 	// conf-file only:
 }
@@ -57,7 +57,7 @@ func readConf(conffile string, vars []conf.Var) error {
 func main() {
 	fmt.Printf("*** start:\nconffile: %s\nstring: %s\nnumber: %d\nbool: %v\nkey: %x\n",
 		confFile, sval, nval, bval, netKey)
-	if err := conf.GetOpt(vars); err != nil {
+	if err := conf.GetOptLongOnly(vars); err != nil {
 		fmt.Printf("%s\n", err)
 		return
 	}
