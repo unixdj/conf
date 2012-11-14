@@ -25,7 +25,7 @@ them besides space (Unicode character class Z), control characters
 Quoted values are enclosed in double quotes (like "this") and obey Go
 quoted string rules.  They may not include Unicode control characters.
 Any character except '"' and `\` stands for itself.  Backslash escapes
-\a, \b, \f, \n, \r, \v, \", \\, \337, \xDF, \u1A2F and \U00104567 are
+\a, \b, \f, \n, \r, \t, \v, \", \\, \337, \xDF, \u1A2F and \U00104567 are
 accepted.  Quoted values, unlike plain ones, can be empty ("").
 
 The rule about control characters means that tabs inside quoted strings
@@ -37,49 +37,52 @@ Example:
 	file      = /etc/passwd      # Comments after settings are OK.
 	--        = "hello, world\n" # Variables can have strange names.
 
-More formally:
+ABNF:
 
-	file           = *(line)
-	line           = opt-assignment opt-comment NL
-	opt-assignment = [ assignment ]
-	assignment     = IDENT EQUALS value
-	value          = PLAIN-VALUE / QUOTED-VALUE
-	opt-comment    = [ COMMENT ]
+	; The language's charset is Unicode, encoding is UTF-8.
 
-	The token OPT-WHITESPACE can appear anywhere and is ignored.
+	file         = *line
+	line         = [assignment] [comment] nl
+	assignment   = ows ident equals value
+	value        = plain-value / quoted-value
 
-Tokens:
+	; The token <opt-space> can appear anywhere and is ignored.
 
-	OPT-WHITESPACE = *(space)
-	NL             = '\n'
-	COMMENT        = '#' *(line-char)
-	IDENT          = ident-alpha *(ident-alnum)
-	EQUALS         = '='
-	PLAIN-VALUE    = 1*(ptext)
-	QUOTED-VALUE   = '"' *(qtext / quoted-pair) '"'
+	; Tokens:
 
-	ident-alnum    = ident-alpha / ascii-digit
-	ident-alpha    = ascii-alpha / '-' / '_'
+	comment      = ows "#" *ctext
+	ident        = ident-alpha *ident-alnum
+	equals       = ows "=" ows
+	plain-value  = 1*ptext
+	quoted-value = DQUOTE *(qtext / quoted-pair) DQUOTE
+	ows          = *WSP
+	nl           = [CR] LF
 
-	quoted-pair    = `\` quoted-char
-	quoted-char    = special / octal-byte-val / hex-byte-val / unicode-val
-	special        = 'a' / 'b' / 'f' / 'n' / 'r' / 'v' / '"' / `\`
-	octal-byte-val = 3(octal-digit)
-	hex-byte-val   = 'x' 2(hex-digit)
-	unicode-val    = 'u' 4(hex-digit) / 'U' 8(hex-digit)
+	ident-alnum  = ident-alpha / DIGIT
+	ident-alpha  = ascii-alpha / "-" / "_"
 
-	ptext          = <any character except space,
-			 control, '"', '#', `'`, '=', `\`>
-	qtext          = <any character except control, '"', `\`>
+	quoted-pair  = BACKSLASH quoted-char
+	quoted-char  = escaped-char / byte-val / unicode-val
+	escaped-char = %x61 / %x62 / %x66 / %x6E / %x72 / %x74 / %x76
+		     / DQUOTE / BACKSLASH	; [abfnrtv"\\]
+	byte-val     = 3octal-digit		; [0-7]{3}
+		     / %x78 2HEXDIG		; x[0-9A-Fa-f]{2}
+	unicode-val  = %x75 4HEXDIG		; u[0-9A-Fa-f]{4}
+		     / %x55 8HEXDIG		; U[0-9A-Fa-f]{8}
 
-	ascii-alpha    = [a-zA-Z]
-	ascii-digit    = [0-9]
-	octal-digit    = [0-7]
-	hex-digit      = [0-9a-fA-f]
-	control        = [\pC]	; Unicode character class C
-				; (includes 00-1F and 80-9F)
-	space          = [\pZ]	; Unicode character class Z
-	line-char      = [^\n]	; anything except NL
+	ctext        = %x00-09 / %x0B-10FFFF	; any CHAR excluding LF
+	ptext        = <any CHAR excluding WSP, CTL,
+			DQUOTE, "#", "'", "=", BACKSLASH>
+	qtext        = <any CHAR excluding CTL, DQUOTE, BACKSLASH>
+	ascii-alpha  = %x41-5A / %x61-7A	; [A-Za-z]
+	octal-digit  = %x30-37			; [0-7]
+	HEXDIG       = DIGIT / %x41-56 / %x61-66; [0-9A-Fa-f]
+	DIGIT        = %x30-39			; [0-9]
+	WSP          = <any CHAR from Unicode character class Z excluding LF>
+	CTL          = %x00-1F / %x7F-9F	; Unicode character class C
+	DQUOTE       = %x22			; "
+	BACKSLASH    = "\"			; \
+	CHAR         = %x00-10FFFF		; any Unicode character
 */
 package conf
 
