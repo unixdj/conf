@@ -16,7 +16,7 @@ import (
 var (
 	errIllOpt  = errors.New("illegal option")
 	errNoArg   = errors.New("option requires an argument")
-	errEndJunk = errors.New("option requires an argument")
+	errEndJunk = errors.New("junk at end of option")
 )
 
 var Args []string
@@ -33,7 +33,7 @@ type FlagError struct {
 // otherwise:
 //     Err -- Flag
 func (e *FlagError) Error() string {
-	if e.Value != "" {
+	if e.Value != "" && e.Value != "true" {
 		return e.Err.Error() + " -- " + e.Value
 	}
 	return e.Err.Error() + " -- " + string(e.Flag)
@@ -122,9 +122,8 @@ func doGetOpt(vars []Var, flavour int) error {
 		}
 		for len(this) > 0 {
 			var (
-				flag rune
-				long string
-				p    string
+				flag    rune
+				long, p string
 			)
 			flag, long, this = nextFlag(this, kind)
 			if flag == utf8.RuneError {
@@ -158,11 +157,36 @@ func doGetOpt(vars []Var, flavour int) error {
 				return newError(flag, p, err)
 			}
 			v.flagSet = true
+			if v.Kind == LineArg {
+				break
+			}
 		}
 	}
 	return nil
 }
 
-func GetOpt(vars []Var) error         { return doGetOpt(vars, Short) }
-func GetOptLong(vars []Var) error     { return doGetOpt(vars, GnuLong) }
-func GetOptLongOnly(vars []Var) error { return doGetOpt(vars, XLong) }
+// GetOpt parses command line options in the traditional Unix
+// manner, stopping at the first unrecognized argument, without
+// the GNU/Linux flags-after-parameters bullshit.  Special
+// handling of "-W" flags and getsubopt() are not supported.
+//
+// GetOpt ignores the Name field of vars.
+func GetOpt(vars []Var) error {
+	return doGetOpt(vars, Short)
+}
+
+// GetOptLong parses command line options in GNU style, with long
+// options prepended by "--".
+func GetOptLong(vars []Var) error {
+	return doGetOpt(vars, GnuLong)
+}
+
+// GetOptLongOnly parses command line options in X11 manner, with
+// long options prepended by "-" or "+", the latter to reset a
+// boolean option.
+//
+// GetOptLongOnly ignores the Flag field of vars, treating all
+// flags as long.
+func GetOptLongOnly(vars []Var) error {
+	return doGetOpt(vars, XLong)
+}

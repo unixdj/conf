@@ -181,10 +181,23 @@ func (v *Uint64Value) Set(s string) error {
 
 func (v *Uint64Value) String() string { return strconv.FormatUint(uint64(*v), 10) }
 
+type funcValue struct {
+	f func(string) error
+}
+
+func (v funcValue) Set(s string) error {
+	return v.f(s)
+}
+
+// FuncValue returns a Value whose Set method is f.
+func FuncValue(f func(string) error) Value {
+	return funcValue{f}
+}
+
 const (
-	HasArg = iota
-	NoArg
-	LineArg
+	HasArg  = iota // flag requires arguments
+	NoArg          // boolean flag with no arguments
+	LineArg        // flag ends processing
 )
 
 // Var describes a configuration variable and has pointers to corresponding
@@ -193,7 +206,7 @@ type Var struct {
 	Flag     rune   // short option
 	Name     string // name of configuration variable / long option
 	Val      Value  // Value to set
-	Kind     int    // command line option takes no argument
+	Kind     int    // HasArg / NoArg / LineArg
 	Required bool   // variable is required to be set in conf file
 	set      bool   // has been set from conf file
 	flagSet  bool   // has been set from command line
