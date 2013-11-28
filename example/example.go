@@ -57,7 +57,7 @@ func readConf(conffile string, vars []conf.Var) error {
 func main() {
 	fmt.Printf("*** start:\nconffile: %s\nstring: %s\nnumber: %d\nbool: %v\nkey: %x\n",
 		confFile, sval, nval, bval, netKey)
-	if err := conf.GetOptLongOnly(vars); err != nil {
+	if err := conf.GetOptLong(vars); err != nil {
 		fmt.Printf("%s\n", err)
 		return
 	}

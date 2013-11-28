@@ -10,6 +10,7 @@ package conf
 import (
 	"errors"
 	"os"
+	"strings"
 	"unicode/utf8"
 )
 
@@ -46,14 +47,15 @@ func newError(f rune, v string, e error) *FlagError {
 
 // flavour
 const (
-	Short = iota
-	XLong
-	GnuLong
+	short = iota
+	xLong
+	gnuLong
 )
 
 const (
 	shortFlag = iota
 	longFlag
+	gnuLongFlag
 	falseFlag
 	endArg
 	endArgSkip
@@ -69,16 +71,16 @@ func nextArg(arg string, flavour int) (int, string) {
 			if len(arg) == 2 {
 				return endArgSkip, ""
 			}
-			if flavour == GnuLong {
-				return longFlag, arg[2:]
+			if flavour == gnuLong {
+				return gnuLongFlag, arg[2:]
 			}
 		}
-		if flavour == XLong {
+		if flavour == xLong {
 			return longFlag, arg[1:]
 		}
 		return shortFlag, arg[1:]
 	case '+':
-		if flavour == XLong {
+		if flavour == xLong {
 			return falseFlag, arg[1:]
 		}
 	}
@@ -86,14 +88,20 @@ func nextArg(arg string, flavour int) (int, string) {
 }
 
 func nextFlag(this string, kind int) (rune, string, string) {
-	if kind != shortFlag {
-		return 0, this, ""
+	switch kind {
+	case shortFlag:
+		flag, size := utf8.DecodeRuneInString(this)
+		return flag, "", this[size:]
+	case gnuLongFlag:
+		if pos := strings.Index(this, "="); pos != -1 {
+			return '=', this[:pos], this[pos+1:]
+		}
 	}
-	flag, size := utf8.DecodeRuneInString(this)
-	return flag, "", this[size:]
+	// longFlag or bare gnuLongFlag
+	return 0, this, ""
 }
 
-func getFlag(flag rune, long string, kind int, vars []Var) *Var {
+func findFlag(flag rune, long string, kind int, vars []Var) *Var {
 	var eq func(i int) bool
 	if kind == shortFlag {
 		eq = func(i int) bool { return vars[i].Flag == flag }
@@ -129,7 +137,7 @@ func doGetOpt(vars []Var, flavour int) error {
 			if flag == utf8.RuneError {
 				return newError(flag, long, errSyntax)
 			}
-			v := getFlag(flag, long, kind, vars)
+			v := findFlag(flag, long, kind, vars)
 			if v == nil {
 				return newError(flag, long, errIllOpt)
 			}
@@ -140,6 +148,9 @@ func doGetOpt(vars []Var, flavour int) error {
 				}
 				p = "false"
 			case v.Kind == NoArg:
+				if kind == gnuLongFlag && flag == '=' {
+					return newError(0, this, errEndJunk)
+				}
 				p = "true"
 			case v.Kind == LineArg:
 				if this != "" {
@@ -148,6 +159,8 @@ func doGetOpt(vars []Var, flavour int) error {
 				}
 			case this != "":
 				p, this = this, ""
+			case kind == gnuLongFlag && flag == '=':
+				// empty parameter
 			case len(Args) != 0:
 				p, Args = Args[0], Args[1:]
 			default:
@@ -203,7 +216,7 @@ the argument must be empty.  The Set function is expected to
 peruse Args.  Command line processing is stopped after a LineArg.
 */
 func GetOpt(vars []Var) error {
-	return doGetOpt(vars, Short)
+	return doGetOpt(vars, short)
 }
 
 /*
@@ -223,7 +236,7 @@ value (i.e., parameter to Value.Set).  NoArg and LineArg are
 treated as in GetOpt.
 */
 func GetOptLong(vars []Var) error {
-	return doGetOpt(vars, GnuLong)
+	return doGetOpt(vars, gnuLong)
 }
 
 /*
@@ -256,5 +269,5 @@ For LineArg, the parameter is an empty string, and the
 command line processing stops.
 */
 func GetOptLongOnly(vars []Var) error {
-	return doGetOpt(vars, XLong)
+	return doGetOpt(vars, xLong)
 }
