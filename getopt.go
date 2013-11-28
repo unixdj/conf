@@ -165,28 +165,96 @@ func doGetOpt(vars []Var, flavour int) error {
 	return nil
 }
 
-// GetOpt parses command line options in the traditional Unix
-// manner, stopping at the first unrecognized argument, without
-// the GNU/Linux flags-after-parameters bullshit.  Special
-// handling of "-W" flags and getsubopt() are not supported.
-//
-// GetOpt ignores the Name field of vars.
+/*
+GetOpt parses command line flags in the traditional Unix
+manner, stopping at the first unrecognized argument, without
+glibc-style flags-after-parameters bullshit.  Special
+handling of "-W" flags and getsubopt() are not supported.
+The unparsed command line arguments are kept in the Args array.
+
+GetOpt ignores the Name field of vars, only parsing short flags.
+
+Command line arguments parsed by GetOpt begin with a dash followed
+by one or more characters.  The special argument "--" (double dash)
+stops command line processing, keeping subsequent arguments in Args.
+Command line processing also stops at the first non-flag argument
+("-" (single dash) or one that doesn't begin with a dash), or after
+a LineArg flag, as described below.
+
+After skipping the initial dash, each argument is parsed for flags
+as follows.
+
+vars is searched for the Var whose Flag is equal to the fist character
+of the remaining argument.
+If none is found, an error is returned.  Otherwise, its Value.Set is
+called with a string parameter, depending on the value of its Kind member.
+
+For a Var whose Kind is NoArg, the parameter is "true" (for
+compatibility with BoolValue).  After encountering a NoArg flag,
+flag processing is restarted at the next character.
+
+For HasArg, if the rest of the argument is not empty, it becomes
+the parameter.  Otherwise the next argument is used, and
+non-existence thereof is treated as an error.  Command line
+argument processing is restarted at the next argument.
+
+For LineArg, the parameter is an empty string, and the rest of
+the argument must be empty.  The Set function is expected to
+peruse Args.  Command line processing is stopped after a LineArg.
+*/
 func GetOpt(vars []Var) error {
 	return doGetOpt(vars, Short)
 }
 
-// GetOptLong parses command line options in GNU style, with long
-// options prepended by "--".
+/*
+GetOptLong parses command line options in GNU style, with long
+options prepended by "--".
+
+GetOptLong functions like GetOpt, except for long arguments
+starting with "--" (two dashes) followed by one or more
+character.
+
+Long arguments can take the form "--name=value" or "--name".
+vars is searched for a Var whose Name is equal to the "name"
+part of the argument.
+The first form is only allowed for vars whose Kind is HasArg.
+HasArg vars of the second form use the next argument as the
+value (i.e., parameter to Value.Set).  NoArg and LineArg are
+treated as in GetOpt.
+*/
 func GetOptLong(vars []Var) error {
 	return doGetOpt(vars, GnuLong)
 }
 
-// GetOptLongOnly parses command line options in X11 manner, with
-// long options prepended by "-" or "+", the latter to reset a
-// boolean option.
-//
-// GetOptLongOnly ignores the Flag field of vars, treating all
-// flags as long.
+/*
+GetOptLongOnly parses command line options in X11 manner, with
+long options prepended by "-" or "+", the latter to reset a
+boolean option.  It ignores the Flag field of vars, treating all
+flags as long.
+
+Command line arguments parsed by GetOpt begin with a dash or a plus,
+followed by one or more characters.  The special argument "--"
+(double dash) stops command line processing, keeping subsequent
+arguments in Args.
+Command line processing also stops at the first non-flag argument
+("-" (single dash), "+" or one that doesn't begin with a dash or
+a plus), or after a LineArg flag, as described below.
+
+vars is searched for the Var whose Name is equal to the part of
+the argument after the initial "-" or "+".
+If none is found, an error is returned.  Otherwise, its Value.Set
+is called with a string parameter.
+
+If the argument starts with "+", the Kind of the Var must be
+NoArg, in which case the parameter is "false".  For one that
+starts with "-", it depends on the Kind of the Var.
+
+For a Var whose Kind is NoArg, the parameter is "true" (for
+compatibility with BoolValue).
+For HasArg, the next argument is used as the parameter.
+For LineArg, the parameter is an empty string, and the
+command line processing stops.
+*/
 func GetOptLongOnly(vars []Var) error {
 	return doGetOpt(vars, XLong)
 }
