@@ -15,16 +15,20 @@ import (
 )
 
 var (
-	errIllOpt  = errors.New("illegal option")
-	errNoArg   = errors.New("option requires an argument")
-	errEndJunk = errors.New("junk at end of option")
+	errIllOpt     = errors.New("illegal option")
+	errNoArg      = errors.New("option requires an argument")
+	errEndJunk    = errors.New("junk at end of option")
+	errAlreadySet = errors.New("option already set")
 )
 
+// Args holds the command line arguments remaining after
+// GetOpt, GetOptLong or GetOptLongOnly is called.
 var Args []string
 
-// FlagError represents the error.
+// FlagError represents a command line processing error.
 type FlagError struct {
 	Flag  rune   // flag
+	Long  string // long flag
 	Value string // value
 	Err   error  // error
 }
@@ -33,16 +37,24 @@ type FlagError struct {
 //     Err -- Value
 // otherwise:
 //     Err -- Flag
+// or:
+//     Err -- Long
 func (e *FlagError) Error() string {
-	if e.Value != "" && e.Value != "true" {
-		return e.Err.Error() + " -- " + e.Value
+	var s string
+	switch {
+	case e.Value != "":
+		s = e.Value
+	case e.Long != "":
+		s = e.Long
+	default:
+		s = string(e.Flag)
 	}
-	return e.Err.Error() + " -- " + string(e.Flag)
+	return e.Err.Error() + " -- " + s
 }
 
-// newError creates FlagError from f, v and e
-func newError(f rune, v string, e error) *FlagError {
-	return &FlagError{f, v, e}
+// newError creates FlagError from f, l, v and e
+func newError(f rune, l string, v string, e error) *FlagError {
+	return &FlagError{f, l, v, e}
 }
 
 // flavour
@@ -135,27 +147,30 @@ func doGetOpt(vars []Var, flavour int) error {
 			)
 			flag, long, this = nextFlag(this, kind)
 			if flag == utf8.RuneError {
-				return newError(flag, long, errSyntax)
+				return newError(flag, long, "", errSyntax)
 			}
 			v := findFlag(flag, long, kind, vars)
 			if v == nil {
-				return newError(flag, long, errIllOpt)
+				return newError(flag, long, "", errIllOpt)
+			}
+			if v.flagSet {
+				return newError(flag, long, "", errAlreadySet)
 			}
 			switch {
 			case kind == falseFlag:
 				if v.Kind != NoArg {
-					return newError(flag, long, errIllOpt)
+					return newError(flag, long, "", errIllOpt)
 				}
 				p = "false"
 			case v.Kind == NoArg:
 				if kind == gnuLongFlag && flag == '=' {
-					return newError(0, this, errEndJunk)
+					return newError(0, long, "", errEndJunk)
 				}
 				p = "true"
 			case v.Kind == LineArg:
 				if this != "" {
 					// XXX
-					return newError(0, this, errEndJunk)
+					return newError(0, "", this, errEndJunk)
 				}
 			case this != "":
 				p, this = this, ""
@@ -164,10 +179,13 @@ func doGetOpt(vars []Var, flavour int) error {
 			case len(Args) != 0:
 				p, Args = Args[0], Args[1:]
 			default:
-				return newError(flag, "", errNoArg)
+				return newError(flag, long, "", errNoArg)
 			}
 			if err := v.Val.Set(p); err != nil {
-				return newError(flag, p, err)
+				if v.Kind == NoArg {
+					p = ""
+				}
+				return newError(flag, long, p, err)
 			}
 			v.flagSet = true
 			if v.Kind == LineArg {
@@ -214,6 +232,12 @@ argument processing is restarted at the next argument.
 For LineArg, the parameter is an empty string, and the rest of
 the argument must be empty.  The Set function is expected to
 peruse Args.  Command line processing is stopped after a LineArg.
+
+Thus, if vars describes the flag 'n' as NoArg and 'h' as HasArg,
+the following command lines will have the identical effect:
+	./prog -n -h param -- arg0 arg1
+	./prog -nh param arg0 arg1
+	./prog -nhparam arg0 arg1
 */
 func GetOpt(vars []Var) error {
 	return doGetOpt(vars, short)
@@ -234,6 +258,13 @@ The first form is only allowed for vars whose Kind is HasArg.
 HasArg vars of the second form use the next argument as the
 value (i.e., parameter to Value.Set).  NoArg and LineArg are
 treated as in GetOpt.
+
+Thus, if vars describes short flags 'n' (NoArg) and 'h' (HasArg)
+and a long flag "long" (HasArg),
+the following command lines will have the identical effect:
+	./prog -n -h param --long=very -- arg0 arg1
+	./prog -nhparam --long very arg0 arg1
+	./prog -nhparam --long very arg0 arg1
 */
 func GetOptLong(vars []Var) error {
 	return doGetOpt(vars, gnuLong)
@@ -244,11 +275,12 @@ GetOptLongOnly parses command line options in X11 manner, with
 long options prepended by "-" or "+", the latter to reset a
 boolean option.  It ignores the Flag field of vars, treating all
 flags as long.
+The unparsed command line arguments are kept in the Args array.
 
-Command line arguments parsed by GetOpt begin with a dash or a plus,
-followed by one or more characters.  The special argument "--"
-(double dash) stops command line processing, keeping subsequent
-arguments in Args.
+Command line arguments parsed by GetOptLongOnly begin with a dash
+or a plus, followed by one or more characters.  The special
+argument "--" (double dash) stops command line processing,
+keeping subsequent arguments in Args.
 Command line processing also stops at the first non-flag argument
 ("-" (single dash), "+" or one that doesn't begin with a dash or
 a plus), or after a LineArg flag, as described below.
@@ -259,14 +291,20 @@ If none is found, an error is returned.  Otherwise, its Value.Set
 is called with a string parameter.
 
 If the argument starts with "+", the Kind of the Var must be
-NoArg, in which case the parameter is "false".  For one that
-starts with "-", it depends on the Kind of the Var.
+NoArg.
 
-For a Var whose Kind is NoArg, the parameter is "true" (for
-compatibility with BoolValue).
+For compatibility with BoolValue, for a Var whose Kind is NoArg,
+the parameter is "true" if the argument starts with '-' and
+"false" if it starts with '+', because war is peace, freedom is
+slavery and backwards compatibility is good.
 For HasArg, the next argument is used as the parameter.
 For LineArg, the parameter is an empty string, and the
 command line processing stops.
+
+Thus, if vars describes long flags "t" and "f" (NoArg) and "h"
+(HasArg), the following command line will set "t" to true, "f" to
+false and "h" to "param", and leave "arg0" and "arg1" in Args:
+	./prog -t +f -h param arg0 arg1
 */
 func GetOptLongOnly(vars []Var) error {
 	return doGetOpt(vars, xLong)

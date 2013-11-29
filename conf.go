@@ -148,7 +148,7 @@ var (
 	errUnknownVar  = errors.New("unknown variable")
 )
 
-// ParseError represents the error.
+// ParseError represents a configuration file parsing error.
 type ParseError struct {
 	File  string // filename or "stdin"
 	Line  int    // line number or 0
